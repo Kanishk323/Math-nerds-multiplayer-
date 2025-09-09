@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -789,7 +788,9 @@
             <select id="game-mode">
                 <option value="vs_ai">AI ke saath khelo</option>
                 <option value="vs_local_player">Local Player ke saath khelo</option>
-            </select>
+            
+    <option value="vs_network">Online Multiplayer ke saath khelo</option>
+</select>
         </div>
         <div id="ai-difficulty-select" style="display: block;">
             <label for="ai-difficulty">AI ki Difficulty chuno:</label>
@@ -3342,5 +3343,71 @@ default:
             }
             return a;
         }</script>
+
+  <!-- Multiplayer Scripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/multiplayer-client.js"></script>
+
+  <script>
+    /* ---------- NETWORK ADAPTERS ---------- */
+    function buildLocalStateForHost() {
+      return { players, deck, discardPile, currentTurn, currentPlayer, currentPhase };
+    }
+
+    function applyNetworkState(state, isHostLocalEcho = false) {
+      if (!state) return;
+      deck = state.deck || deck;
+      discardPile = state.discardPile || discardPile;
+      currentTurn = state.currentTurn || currentTurn;
+      currentPlayer = state.currentPlayer || currentPlayer;
+      currentPhase = state.currentPhase || currentPhase;
+      players = state.players;
+
+      renderHand("player1"); renderHand("player2");
+      updateStatus();
+      updateDeckDiscardCounts();
+      updatePhaseDisplay();
+    }
+
+    function onNetworkAction(fromSocketId, action) {
+      if (!action || !action.type) return;
+      switch (action.type) {
+        case "play_card":
+          const { card, player } = action.payload;
+          players[player].hand = players[player].hand.filter(c => c.name !== card.name);
+          discardPile.push(card);
+          renderHand("player1"); renderHand("player2");
+          updateDeckDiscardCounts();
+          break;
+        case "end_turn":
+          setTimeout(() => { startTurnCycle(); }, 500);
+          break;
+      }
+    }
+
+    // Override startGame to handle vs_network
+    const oldStartGame = window.startGame;
+    window.startGame = function() {
+      const gm = document.getElementById("game-mode").value;
+      if (gm !== "vs_network") {
+        return oldStartGame();
+      }
+      if (window.__IS_HOST) {
+        oldStartGame();
+        const snapshot = buildLocalStateForHost();
+        setTimeout(() => {
+          if (window.MULTIPLAYER) {
+            window.MULTIPLAYER.hostInitState(snapshot);
+            showMessage("Host init sent. Waiting for opponent...");
+          }
+        }, 500);
+      } else {
+        showMessage("Waiting for host to start the game...");
+      }
+    };
+  </script>
 </body>
+
 </html>
+
+ 
